@@ -69,6 +69,7 @@
         <option value="bakery">Bakeries</option>
         <option value="gym">Gyms / Fitness</option>
       </select>
+      <input type="text" id="radiuses" placeholder="Radius (e.g. 1500,2500,3500)" value="1500,2500,3500" title="Enter radiuses in meters, comma-separated" />
       <button class="primary" onclick="startSearch()">🔍 Find Leads</button>
     </div>
   </div>
@@ -126,9 +127,17 @@ async function startSearch() {
   const key = document.getElementById('apikey').value.trim();
   const city = document.getElementById('city').value.trim();
   const type = document.getElementById('category').value;
+  const radiusInput = document.getElementById('radiuses').value.trim();
 
   if (!key) { alert('Please enter your Google API key'); return; }
   if (!city) { alert('Please enter an area'); return; }
+
+  let radiuses = [2500];
+  try {
+    radiuses = radiusInput.split(',').map(r => parseInt(r.trim()));
+  } catch {
+    alert('Invalid radius input. Using default: 2500');
+  }
 
   allData = [];
   document.getElementById('result-area').innerHTML = '';
@@ -137,33 +146,41 @@ async function startSearch() {
   setProgress('⏳ Step 1/3: Finding location...');
 
   try {
-    // Geocode
     const geo = await apiFetch('geocode', { address: city, key });
     if (geo.status !== 'OK') throw new Error('Location not found. Check your area name.');
     const loc = geo.results[0].geometry.location;
 
-    // Nearby search — fetch all pages
     setProgress('⏳ Step 2/3: Searching businesses...');
-    let places = [];
-    let pagetoken = null;
-    let page = 0;
+    let seenPlaces = {};
 
-    while (true) {
-      const params = { location: `${loc.lat},${loc.lng}`, radius: 2500, type, key };
-      if (pagetoken) params.pagetoken = pagetoken;
-      if (page > 0) await new Promise(r => setTimeout(r, 2000));
-      const data = await apiFetch('nearbysearch', params);
-      if (data.status === 'REQUEST_DENIED') throw new Error('API key rejected: ' + (data.error_message || ''));
-      places = places.concat(data.results || []);
-      pagetoken = data.next_page_token;
-      setProgress(`⏳ Step 2/3: Found ${places.length} businesses...`);
-      if (!pagetoken) break;
-      page++;
+    for (let radius of radiuses) {
+      setProgress(`⏳ Step 2/3: Searching radius ${radius}m...`);
+      let pagetoken = null;
+      let page = 0;
+
+      while (true) {
+        const params = { location: `${loc.lat},${loc.lng}`, radius, type, key };
+        if (pagetoken) params.pagetoken = pagetoken;
+        if (page > 0) await new Promise(r => setTimeout(r, 2000));
+        const data = await apiFetch('nearbysearch', params);
+        if (data.status === 'REQUEST_DENIED') throw new Error('API key rejected: ' + (data.error_message || ''));
+
+        for (let place of (data.results || [])) {
+          if (place.place_id && !seenPlaces[place.place_id]) {
+            seenPlaces[place.place_id] = place;
+          }
+        }
+
+        pagetoken = data.next_page_token;
+        setProgress(`⏳ Step 2/3: Found ${Object.keys(seenPlaces).length} unique businesses...`);
+        if (!pagetoken) break;
+        page++;
+      }
     }
 
+    let places = Object.values(seenPlaces);
     if (!places.length) throw new Error('No businesses found in this area. Try a different locality.');
 
-    // Details for each place
     for (let i = 0; i < places.length; i++) {
       const p = places[i];
       setProgress(`⏳ Step 3/3: Fetching details ${i + 1}/${places.length} — ${p.name}`);
@@ -175,6 +192,7 @@ async function startSearch() {
         });
         const d = det.result || {};
         allData.push({
+          place_id: p.place_id,
           name: d.name || p.name,
           phone: d.formatted_phone_number || null,
           website: d.website || null,
@@ -183,7 +201,7 @@ async function startSearch() {
           mapsUrl: d.url || `https://www.google.com/maps/place/?q=place_id:${p.place_id}`
         });
       } catch {
-        allData.push({ name: p.name, phone: null, website: null, address: null, rating: p.rating || null, mapsUrl: null });
+        allData.push({ place_id: p.place_id, name: p.name, phone: null, website: null, address: null, rating: p.rating || null, mapsUrl: null });
       }
     }
 

@@ -16,6 +16,15 @@ with st.sidebar:
     api_key = st.text_input("Paste your Google Places API key", type="password")
     st.caption("Stored only in session memory — never saved or sent anywhere except Google's API.")
 
+    st.divider()
+    st.header("📍 Search Radius")
+    radius_input = st.text_input("Radius(es) in meters", value="1500, 2500, 3500", help="Enter one or more radiuses separated by commas (e.g., 1500,2500,3500). Each radius searches independently to find more results.")
+    try:
+        radiuses = [int(r.strip()) for r in radius_input.split(",")]
+    except ValueError:
+        radiuses = [2500]
+        st.warning("Invalid radius input. Using default: 2500m")
+
 # Main columns
 col1, col2, col3 = st.columns(3)
 
@@ -84,25 +93,36 @@ if search_btn:
                 loc = geo["results"][0]["geometry"]["location"]
                 
                 with st.spinner("⏳ Step 2/3: Searching businesses..."):
-                    places = []
-                    pagetoken = None
-                    page = 0
+                    seen_places = {}
 
-                    while True:
-                        data = nearbysearch(loc["lat"], loc["lng"], 2500, category[1], api_key, pagetoken)
-                        if data and data.get("status") == "REQUEST_DENIED":
-                            st.error(f"❌ API key rejected: {data.get('error_message', '')}")
-                            break
-                        if data:
-                            places.extend(data.get("results", []))
-                            pagetoken = data.get("next_page_token")
-                            if not pagetoken:
+                    for radius in radiuses:
+                        st.write(f"   Searching radius: {radius}m")
+                        pagetoken = None
+                        page = 0
+
+                        while True:
+                            data = nearbysearch(loc["lat"], loc["lng"], radius, category[1], api_key, pagetoken)
+                            if data and data.get("status") == "REQUEST_DENIED":
+                                st.error(f"❌ API key rejected: {data.get('error_message', '')}")
                                 break
-                            time.sleep(2)
-                        else:
-                            break
-                        page += 1
-                
+                            if data:
+                                for place in data.get("results", []):
+                                    place_id = place.get("place_id")
+                                    if place_id and place_id not in seen_places:
+                                        seen_places[place_id] = place
+
+                                pagetoken = data.get("next_page_token")
+                                results_count = len([p for p in seen_places.values() if p.get("place_id")])
+                                st.write(f"      Page {page+1}: +{len(data.get('results', []))} results. Total unique: {results_count}. Has next: {bool(pagetoken)}")
+                                if not pagetoken:
+                                    break
+                                time.sleep(2)
+                            else:
+                                break
+                            page += 1
+
+                    places = list(seen_places.values())
+
                 if not places:
                     st.error("❌ No businesses found in this area. Try a different locality.")
                 else:
@@ -111,8 +131,9 @@ if search_btn:
                             st.write(f"   Fetching {i+1}/{len(places)}...")
                             details = place_details(p.get("place_id"), api_key)
                             d = details.get("result", {}) if details else {}
-                            
+
                             st.session_state.all_data.append({
+                                "place_id": p.get("place_id"),
                                 "name": d.get("name") or p.get("name"),
                                 "phone": d.get("formatted_phone_number"),
                                 "website": d.get("website"),
