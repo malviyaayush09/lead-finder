@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Local Business Lead Finder</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, sans-serif; background: #f5f5f5; color: #1a1a1a; padding: 2rem 1rem; }
+  .container { max-width: 860px; margin: 0 auto; }
+  h1 { font-size: 22px; font-weight: 600; margin-bottom: 4px; }
+  .sub { font-size: 14px; color: #666; margin-bottom: 1.5rem; }
+  .section { background: #fff; border: 1px solid #eee; border-radius: 12px; padding: 1.25rem; margin-bottom: 1rem; }
+  .section-title { font-size: 12px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; }
+  input, select { flex: 1; min-width: 160px; padding: 8px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; background: #fff; }
+  input[type="password"], input[type="text"].key { font-family: monospace; font-size: 13px; }
+  button { padding: 8px 18px; border: 1px solid #ccc; border-radius: 8px; font-size: 14px; background: #fff; cursor: pointer; white-space: nowrap; }
+  button:hover { background: #f0f0f0; }
+  .primary { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
+  .primary:hover { background: #333; }
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 1rem; }
+  .stat { background: #fff; border-radius: 10px; padding: 0.85rem 1rem; border: 1px solid #eee; }
+  .stat-val { font-size: 24px; font-weight: 600; }
+  .stat-label { font-size: 11px; color: #888; margin-top: 2px; }
+  .filter-row { display: flex; gap: 8px; margin-bottom: 1rem; flex-wrap: wrap; align-items: center; }
+  .filter-btn { font-size: 12px; padding: 4px 14px; border-radius: 999px; cursor: pointer; }
+  .filter-btn.active { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
+  .card { background: #fff; border: 1px solid #eee; border-radius: 12px; padding: 1rem 1.25rem; margin-bottom: 10px; display: flex; gap: 14px; align-items: flex-start; }
+  .card-icon { width: 44px; height: 44px; border-radius: 8px; background: #f5f5f5; display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0; }
+  .biz-name { font-weight: 600; font-size: 15px; margin-bottom: 3px; }
+  .biz-meta { font-size: 13px; color: #666; margin-bottom: 6px; }
+  .tags { display: flex; gap: 6px; flex-wrap: wrap; }
+  .tag { font-size: 12px; padding: 3px 9px; border-radius: 6px; border: 1px solid #eee; background: #fafafa; color: #555; text-decoration: none; }
+  .tag-danger  { background: #fff0f0; border-color: #fcc; color: #c00; }
+  .tag-success { background: #f0fff4; border-color: #9f9; color: #070; }
+  .tag-warn    { background: #fffbe6; border-color: #ffe066; color: #7a6000; }
+  .tag-blue    { background: #f0f4ff; border-color: #aac; color: #336; }
+  #status { text-align: center; padding: 3rem 1rem; color: #888; font-size: 14px; }
+  .progress { font-size: 13px; color: #555; background: #fff; border: 1px solid #eee; border-radius: 8px; padding: 10px 14px; margin-bottom: 1rem; display: none; }
+  .key-note { font-size: 12px; color: #aaa; margin-top: 6px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🗺️ Local Business Lead Finder</h1>
+  <p class="sub">Powered by Google Places API — gets name, phone, website, rating for every business</p>
+
+  <div class="section">
+    <div class="section-title">🔑 Google API Key</div>
+    <div class="row">
+      <input type="password" id="apikey" class="key" placeholder="Paste your Google Places API key here" />
+      <button onclick="toggleKey()">👁 Show</button>
+    </div>
+    <p class="key-note">Stored only in your browser memory — never saved or sent anywhere except Google's API.</p>
+  </div>
+
+  <div class="section">
+    <div class="section-title">🔍 Search</div>
+    <div class="row">
+      <input type="text" id="city" placeholder="Area (e.g. Koramangala, Bangalore)" value="Koramangala, Bangalore" />
+      <select id="category">
+        <option value="store">All Shops</option>
+        <option value="restaurant">Restaurants / Cafes</option>
+        <option value="hair_care">Salons / Parlours</option>
+        <option value="pharmacy">Pharmacies</option>
+        <option value="clothing_store">Clothing Stores</option>
+        <option value="electronics_store">Electronics</option>
+        <option value="bakery">Bakeries</option>
+        <option value="gym">Gyms / Fitness</option>
+      </select>
+      <button class="primary" onclick="startSearch()">🔍 Find Leads</button>
+    </div>
+  </div>
+
+  <div id="progress" class="progress"></div>
+
+  <div id="stats-area" style="display:none">
+    <div class="stats">
+      <div class="stat"><div class="stat-val" id="s-total">0</div><div class="stat-label">businesses found</div></div>
+      <div class="stat"><div class="stat-val" id="s-leads">0</div><div class="stat-label">no website (hot leads)</div></div>
+      <div class="stat"><div class="stat-val" id="s-phone">0</div><div class="stat-label">have phone number</div></div>
+      <div class="stat"><div class="stat-val" id="s-rating">—</div><div class="stat-label">avg rating</div></div>
+    </div>
+    <div class="filter-row">
+      <button class="filter-btn active" onclick="setFilter('all',this)">All</button>
+      <button class="filter-btn" onclick="setFilter('no-website',this)">No Website</button>
+      <button class="filter-btn" onclick="setFilter('has-phone',this)">Has Phone</button>
+      <button class="filter-btn" onclick="setFilter('both',this)">📞 + No Website</button>
+      <button type="button" onclick="exportCSV()">⬇️ Export CSV</button>
+    </div>
+  </div>
+
+  <div id="status">Enter your area, paste your API key, and click Find Leads 👆</div>
+  <div id="result-area"></div>
+</div>
+
+<script>
+let allData = [];
+let activeFilter = 'all';
+const BASE = 'http://localhost:5000';
+
+const catEmoji = {
+  store:'🏪', restaurant:'🍽️', hair_care:'✂️', pharmacy:'💊',
+  clothing_store:'👕', electronics_store:'📱', bakery:'🥐', gym:'🏋️'
+};
+
+function toggleKey() {
+  const inp = document.getElementById('apikey');
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+}
+
+function setProgress(msg) {
+  const el = document.getElementById('progress');
+  el.style.display = msg ? 'block' : 'none';
+  el.textContent = msg;
+}
+
+async function apiFetch(endpoint, params) {
+  const qs = new URLSearchParams(params).toString();
+  const res = await fetch(`${BASE}/api/${endpoint}?${qs}`);
+  return res.json();
+}
+
+async function startSearch() {
+  const key = document.getElementById('apikey').value.trim();
+  const city = document.getElementById('city').value.trim();
+  const type = document.getElementById('category').value;
+
+  if (!key) { alert('Please enter your Google API key'); return; }
+  if (!city) { alert('Please enter an area'); return; }
+
+  allData = [];
+  document.getElementById('result-area').innerHTML = '';
+  document.getElementById('stats-area').style.display = 'none';
+  document.getElementById('status').style.display = 'none';
+  setProgress('⏳ Step 1/3: Finding location...');
+
+  try {
+    // Geocode
+    const geo = await apiFetch('geocode', { address: city, key });
+    if (geo.status !== 'OK') throw new Error('Location not found. Check your area name.');
+    const loc = geo.results[0].geometry.location;
+
+    // Nearby search — up to 3 pages (60 results)
+    setProgress('⏳ Step 2/3: Searching businesses...');
+    let places = [];
+    let pagetoken = null;
+
+    for (let page = 0; page < 3; page++) {
+      const params = { location: `${loc.lat},${loc.lng}`, radius: 2500, type, key };
+      if (pagetoken) params.pagetoken = pagetoken;
+      if (page > 0) await new Promise(r => setTimeout(r, 2000));
+      const data = await apiFetch('nearbysearch', params);
+      if (data.status === 'REQUEST_DENIED') throw new Error('API key rejected: ' + (data.error_message || ''));
+      places = places.concat(data.results || []);
+      pagetoken = data.next_page_token;
+      setProgress(`⏳ Step 2/3: Found ${places.length} businesses...`);
+      if (!pagetoken) break;
+    }
+
+    if (!places.length) throw new Error('No businesses found in this area. Try a different locality.');
+
+    // Details for each place
+    for (let i = 0; i < places.length; i++) {
+      const p = places[i];
+      setProgress(`⏳ Step 3/3: Fetching details ${i + 1}/${places.length} — ${p.name}`);
+      try {
+        const det = await apiFetch('details', {
+          place_id: p.place_id,
+          fields: 'name,formatted_phone_number,website,formatted_address,rating,url',
+          key
+        });
+        const d = det.result || {};
+        allData.push({
+          name: d.name || p.name,
+          phone: d.formatted_phone_number || null,
+          website: d.website || null,
+          address: d.formatted_address || null,
+          rating: d.rating || p.rating || null,
+          mapsUrl: d.url || `https://www.google.com/maps/place/?q=place_id:${p.place_id}`
+        });
+      } catch {
+        allData.push({ name: p.name, phone: null, website: null, address: null, rating: p.rating || null, mapsUrl: null });
+      }
+    }
+
+    setProgress('');
+    updateStats();
+    renderCards(activeFilter);
+    document.getElementById('stats-area').style.display = 'block';
+    exportCSV(true);
+
+  } catch (e) {
+    setProgress('');
+    document.getElementById('status').style.display = 'block';
+    document.getElementById('status').textContent = '❌ ' + e.message;
+  }
+}
+
+function updateStats() {
+  document.getElementById('s-total').textContent = allData.length;
+  document.getElementById('s-leads').textContent = allData.filter(b => !b.website).length;
+  document.getElementById('s-phone').textContent = allData.filter(b => b.phone).length;
+  const rated = allData.filter(b => b.rating);
+  document.getElementById('s-rating').textContent = rated.length
+    ? (rated.reduce((s, b) => s + b.rating, 0) / rated.length).toFixed(1) : '—';
+}
+
+function setFilter(f, btn) {
+  activeFilter = f;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderCards(f);
+}
+
+function renderCards(filter) {
+  let data = allData;
+  if (filter === 'no-website') data = allData.filter(b => !b.website);
+  if (filter === 'has-phone')  data = allData.filter(b => b.phone);
+  if (filter === 'both')       data = allData.filter(b => b.phone && !b.website);
+
+  const emoji = catEmoji[document.getElementById('category').value] || '🏢';
+
+  if (!data.length) {
+    document.getElementById('result-area').innerHTML = '<p style="text-align:center;padding:2rem;color:#888">No results for this filter</p>';
+    return;
+  }
+
+  document.getElementById('result-area').innerHTML = `
+    <p style="font-size:13px;color:#888;margin-bottom:12px">Showing ${data.length} businesses</p>
+    ${data.map(b => `
+    <div class="card">
+      <div class="card-icon">${emoji}</div>
+      <div style="flex:1;min-width:0">
+        <div class="biz-name">${b.name}</div>
+        ${b.address ? `<div class="biz-meta">📍 ${b.address}</div>` : ''}
+        <div class="tags">
+          ${b.website
+            ? `<span class="tag tag-success">✅ Has website</span>`
+            : `<span class="tag tag-danger">🔴 No website — pitch this!</span>`}
+          ${b.phone
+            ? `<span class="tag tag-success">📞 ${b.phone}</span>`
+            : `<span class="tag tag-warn">No phone listed</span>`}
+          ${b.rating ? `<span class="tag tag-blue">⭐ ${b.rating}</span>` : ''}
+          ${b.mapsUrl ? `<a href="${b.mapsUrl}" target="_blank" class="tag">🗺️ Google Maps</a>` : ''}
+        </div>
+      </div>
+    </div>`).join('')}
+  `;
+}
+
+function exportCSV(auto = false) {
+  if (!allData.length) {
+    if (!auto) alert('No leads available to export. Run a search first.');
+    return;
+  }
+
+  const rows = [['Name', 'Address', 'Phone', 'Website', 'Rating', 'Google Maps']];
+  allData.forEach(b => rows.push([
+    b.name, b.address || '', b.phone || '', b.website || '', b.rating || '', b.mapsUrl || ''
+  ]));
+
+  const csv = rows.map(r => r.map(c => {
+    const value = c == null ? '' : String(c);
+    return `"${value.replace(/"/g, '""')}"`;
+  }).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const filename = 'leads.csv';
+
+  if (navigator.msSaveBlob) {
+    navigator.msSaveBlob(blob, filename);
+    return;
+  }
+
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.target = '_blank';
+  a.rel = 'noopener noreferrer';
+  a.style.display = 'none';
+  document.body.appendChild(a);
+
+  const event = new MouseEvent('click', {
+    view: window,
+    bubbles: true,
+    cancelable: true
+  });
+  a.dispatchEvent(event);
+
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+  if (auto) {
+    setProgress('✅ CSV file created and download started');
+    setTimeout(() => setProgress(''), 2500);
+  }
+}
+</script>
+</body>
+</html>
