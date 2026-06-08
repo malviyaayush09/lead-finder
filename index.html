@@ -142,12 +142,13 @@ async function startSearch() {
     if (geo.status !== 'OK') throw new Error('Location not found. Check your area name.');
     const loc = geo.results[0].geometry.location;
 
-    // Nearby search — up to 3 pages (60 results)
+    // Nearby search — fetch all pages
     setProgress('⏳ Step 2/3: Searching businesses...');
     let places = [];
     let pagetoken = null;
+    let page = 0;
 
-    for (let page = 0; page < 3; page++) {
+    while (true) {
       const params = { location: `${loc.lat},${loc.lng}`, radius: 2500, type, key };
       if (pagetoken) params.pagetoken = pagetoken;
       if (page > 0) await new Promise(r => setTimeout(r, 2000));
@@ -157,6 +158,7 @@ async function startSearch() {
       pagetoken = data.next_page_token;
       setProgress(`⏳ Step 2/3: Found ${places.length} businesses...`);
       if (!pagetoken) break;
+      page++;
     }
 
     if (!places.length) throw new Error('No businesses found in this area. Try a different locality.');

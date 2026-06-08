@@ -86,8 +86,9 @@ if search_btn:
                 with st.spinner("⏳ Step 2/3: Searching businesses..."):
                     places = []
                     pagetoken = None
-                    
-                    for page in range(3):
+                    page = 0
+
+                    while True:
                         data = nearbysearch(loc["lat"], loc["lng"], 2500, category[1], api_key, pagetoken)
                         if data and data.get("status") == "REQUEST_DENIED":
                             st.error(f"❌ API key rejected: {data.get('error_message', '')}")
@@ -97,8 +98,10 @@ if search_btn:
                             pagetoken = data.get("next_page_token")
                             if not pagetoken:
                                 break
-                            if page < 2:
-                                time.sleep(2)
+                            time.sleep(2)
+                        else:
+                            break
+                        page += 1
                 
                 if not places:
                     st.error("❌ No businesses found in this area. Try a different locality.")
